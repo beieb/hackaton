@@ -115,7 +115,7 @@ class Preview:
 
 
     @staticmethod
-    def clean(df, target_col=None, nan_thresh=0.20, corr_thresh=0.95, var_thresh=0.01, nan_row_thresh=0.7, scale=True):
+    def clean(df, target_col=None, nan_thresh=0.80, corr_thresh=0.95, var_thresh=0.01, nan_row_thresh=0.7, scale=True):
         """
         Nettoie le DataFrame :
         1. Supprime les lignes problématiques (vides, trop de NaN, doublons).
@@ -147,9 +147,9 @@ class Preview:
 
         # --- Étape 2 : Supprimer les colonnes avec trop de NaN ---
         before = df.shape[1]
-        df = df.dropna(thresh=len(df) * (1 - nan_thresh), axis=1)  # Corrige la logique du seuil
+        df = df.dropna(thresh=len(df) * (1-nan_thresh), axis=1)
         after = df.shape[1]
-        print(f"\n[1] Suppression NaN > {nan_thresh*100:.0f}% : {before} → {after} colonnes (-{before - after})")
+        print(f"\n[1] Suppression NaN > {(1-nan_thresh)*100:.0f}% : {before} → {after} colonnes (-{before - after})")
 
         # --- Étape 3 : Garder uniquement les colonnes numériques ---
         df_numeric = df.select_dtypes(include=[np.number])
