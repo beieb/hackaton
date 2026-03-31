@@ -32,14 +32,31 @@ class Preview:
     @staticmethod
     def show_as_graph(missing_values, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        
+        filtered = missing_values[missing_values > 0]
+        
+        # Si aucune valeur manquante, sauvegarder un graphique vide avec message
+        if filtered.empty:
+            plt.figure(figsize=(6, 3))
+            plt.text(0.5, 0.5, 'Aucune valeur manquante', 
+                    ha='center', va='center', fontsize=14,
+                    transform=plt.gca().transAxes)
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(path)
+            plt.close()
+            print(f"Aucune valeur manquante — graphique vide sauvegardé : {path}")
+            return
+
         plt.figure(figsize=(10, 6))
-        missing_values[missing_values > 0].plot(kind='bar')
+        filtered.plot(kind='bar')
         plt.title('Missing Values per Column')
         plt.xlabel('Columns')
         plt.ylabel('Number of Missing Values')
         plt.tight_layout()
         plt.savefig(path)
         plt.close()
+
     @staticmethod
     def correlation_matrix(df, name, threshold=0.8):
         df_numeric = df.select_dtypes(include=[np.number])
@@ -186,3 +203,103 @@ class Preview:
 
         return df_clean, to_drop
 
+    @staticmethod
+    def analyze_columns(df, nan_thresh_report=0.2):
+        """
+        Analyse chaque colonne et la catégorise :
+        - binaire (0/1 ou NaN) : NaN probablement = 0
+        - catégorielle (peu de valeurs uniques)
+        - continue (nombreuses valeurs uniques)
+        """
+        results = []
+
+        for col in df.columns:
+            series = df[col].dropna()
+            n_total    = len(df[col])
+            n_missing  = df[col].isnull().sum()
+            pct_missing = n_missing / n_total
+            unique_vals = sorted(series.unique())
+            n_unique   = len(unique_vals)
+
+            # --- Détection du type ---
+            is_binary = set(unique_vals).issubset({0, 1, 0.0, 1.0})
+
+            if is_binary:
+                col_type = 'binaire'
+                # Taux de 1 parmi les non-NaN
+                rate_1 = series.mean()
+                # Si beaucoup de NaN + peu de 1 → NaN probablement = 0
+                nan_likely_zero = (pct_missing > 0.3) and (rate_1 < 0.5)
+                suggestion = 'NaN → 0 (probable absent)' if nan_likely_zero else 'NaN → mode'
+            elif n_unique <= 10:
+                col_type = 'catégorielle'
+                suggestion = 'NaN → mode'
+            else:
+                col_type = 'continue'
+                skewness = series.skew()
+                suggestion = 'NaN → médiane' if abs(skewness) > 1 else 'NaN → moyenne'
+
+            results.append({
+                'colonne'      : col,
+                'type'         : col_type,
+                'n_unique'     : n_unique,
+                'valeurs_uniq' : str(unique_vals[:5]),  # aperçu des 5 premières valeurs
+                'pct_nan'      : round(pct_missing * 100, 1),
+                'suggestion'   : suggestion
+            })
+
+        report = pd.DataFrame(results)
+
+        # Résumé
+        print("\n=== Résumé des types de colonnes ===")
+        print(report['type'].value_counts().to_string())
+        print(f"\nColonnes avec > {nan_thresh_report*100:.0f}% de NaN :")
+        print(report[report['pct_nan'] > nan_thresh_report*100][
+            ['colonne', 'type', 'pct_nan', 'suggestion']
+        ].to_string(index=False))
+
+        # Sauvegarde
+        os.makedirs('fig', exist_ok=True)
+        report.to_csv(os.path.join('fig', 'column_analysis.csv'), index=False)
+        print("\nAnalyse sauvegardée dans fig/column_analysis.csv")
+
+        return report
+
+
+    @staticmethod
+    def smart_impute(df, column_report):
+        """
+        Impute les NaN selon le type détecté dans column_report.
+        - binaire + NaN probable = 0  → fillna(0)
+        - binaire autre             → fillna(mode)
+        - catégorielle              → fillna(mode)
+        - continue asymétrique      → fillna(médiane)
+        - continue symétrique       → fillna(moyenne)
+        """
+        df = df.copy()
+
+        for _, row in column_report.iterrows():
+            col = row['colonne']
+            if col not in df.columns:
+                continue
+
+            suggestion = row['suggestion']
+
+            if 'NaN → 0' in suggestion:
+                df[col] = df[col].fillna(0)
+
+            elif 'mode' in suggestion:
+                mode_val = df[col].mode()
+                if len(mode_val) > 0:
+                    df[col] = df[col].fillna(mode_val[0])
+
+            elif 'médiane' in suggestion:
+                df[col] = df[col].fillna(df[col].median())
+
+            elif 'moyenne' in suggestion:
+                df[col] = df[col].fillna(df[col].mean())
+
+        remaining_nan = df.isnull().sum().sum()
+        print(f"NaN restants après imputation : {remaining_nan}")
+
+        return df
