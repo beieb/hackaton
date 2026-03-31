@@ -118,12 +118,14 @@ class Preview:
     def clean(df, target_col=None, nan_thresh=0.80, corr_thresh=0.95, var_thresh=0.01, nan_row_thresh=0.7, scale=True):
         """
         Nettoie le DataFrame :
-        1. Supprime les lignes problématiques (vides, trop de NaN, doublons).
-        2. Sépare la cible si fournie.
-        3. Supprime les colonnes avec trop de NaN.
-        4. Supprime les colonnes à variance quasi nulle.
-        5. Supprime les colonnes redondantes (corrélation > corr_thresh).
-        6. Normalise les features numériques (optionnel).
+        
+        1 : Séparer la cible
+        2 : Supprimer les colonnes avec trop de NaN
+        3 : Garder uniquement les colonnes numériques
+        4 : Supprimer les colonnes à variance quasi nulle.
+        5 : Supprimer les colonnes redondantes (corrélation)
+        6 : Supprimer les lignes problématiques
+        7 : Normalisation ( standard scaling)
 
         Paramètres :
         - df          : DataFrame à nettoyer.
@@ -166,11 +168,7 @@ class Preview:
         after = df_numeric.shape[1]
         print(f"[3] Suppression variance < {var_thresh} : {before} → {after} colonnes (-{before - after})")
 
-        # --- Étape 5 : Supprimer les lignes problématiques ---
-        df = Preview.drop_useless_rows(df, nan_row_thresh=nan_row_thresh)
-        print(f"[4] Après suppression des lignes : {df.shape}")
-
-        # --- Étape 6 : Supprimer les colonnes redondantes (corrélation) ---
+        # --- Étape 5 : Supprimer les colonnes redondantes (corrélation) ---
         
         before = df_numeric.shape[1]
         corr_matrix = df_filled.loc[:, df_numeric.columns].corr().abs()
@@ -180,6 +178,11 @@ class Preview:
         after = df_numeric.shape[1]
         print(f"[5] Suppression corrélation > {corr_thresh} : {before} → {after} colonnes (-{before - after})")
         print(f"    Colonnes supprimées : {to_drop}")
+
+        # --- Étape 6 : Supprimer les lignes problématiques ---
+
+        df = Preview.drop_useless_rows(df, nan_row_thresh=nan_row_thresh)
+        print(f"[4] Après suppression des lignes : {df.shape}")
 
         # --- Étape 7 : Normalisation ---
         if scale:
