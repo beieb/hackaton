@@ -114,7 +114,90 @@ class Preview:
         print(f"Paires sauvegardées : {csv_path}")
 
 
+    @staticmethod
+    def clean(df, target_col=None, nan_thresh=0.20, corr_thresh=0.95, var_thresh=0.01):
+        """
+        Nettoie le DataFrame :
+        1. Sépare la cible si fournie
+        2. Supprime les colonnes avec trop de NaN
+        3. Supprime les colonnes à variance quasi nulle
+        4. Supprime les colonnes redondantes (corrélation > corr_thresh)
+        
+        Paramètres :
+        - df          : DataFrame à nettoyer
+        - target_col  : nom de la colonne cible à exclure du nettoyage (optionnel)
+        - nan_thresh  : seuil de NaN (défaut 0.5 = 50%)
+        - corr_thresh : seuil de corrélation pour suppression (défaut 0.95)
+        - var_thresh  : seuil de variance minimale (défaut 0.01)
+        """
+
+        print("=" * 60)
+        print(f"Shape initiale : {df.shape}")
+
+        # --- Séparer la cible ---
+        target = None
+        if target_col and target_col in df.columns:
+            target = df[target_col]
+            df = df.drop(columns=[target_col])
+            print(f"Colonne cible '{target_col}' mise de côté")
+
+        # --- Étape 1 : Supprimer colonnes avec trop de NaN ---
+        before = df.shape[1]
+        df = df.dropna(thresh=len(df) * nan_thresh, axis=1)
+        after = df.shape[1]
+        print(f"\n[1] Suppression NaN > {nan_thresh*100:.0f}% : {before} → {after} colonnes (-{before - after})")
+
+        # --- Étape 2 : Garder uniquement les colonnes numériques ---
+        df_numeric = df.select_dtypes(include=[np.number])
+        df_non_numeric = df.select_dtypes(exclude=[np.number])
+        print(f"[2] Colonnes numériques : {df_numeric.shape[1]} | non-numériques : {df_non_numeric.shape[1]}")
+
+        # --- Étape 3 : Supprimer colonnes à variance quasi nulle ---
+        before = df_numeric.shape[1]
+        from sklearn.feature_selection import VarianceThreshold
+        selector = VarianceThreshold(threshold=var_thresh)
+        # fill NaN temporairement avec la médiane pour calculer la variance
+        df_filled = df_numeric.fillna(df_numeric.median())
+        selector.fit(df_filled)
+        df_numeric = df_numeric.loc[:, selector.get_support()]
+        after = df_numeric.shape[1]
+        print(f"[3] Suppression variance < {var_thresh} : {before} → {after} colonnes (-{before - after})")
+
+        # --- Étape 4 : Supprimer colonnes redondantes (corrélation) ---
+        before = df_numeric.shape[1]
+        corr_matrix = df_filled.loc[:, df_numeric.columns].corr().abs()
+        upper = corr_matrix.where(
+            np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
+        )
+        to_drop = [col for col in upper.columns if any(upper[col] > corr_thresh)]
+        df_numeric = df_numeric.drop(columns=to_drop)
+        after = df_numeric.shape[1]
+        print(f"[4] Suppression corrélation > {corr_thresh} : {before} → {after} colonnes (-{before - after})")
+        print(f"    Colonnes supprimées : {to_drop}")
+
+        # --- Reconstruction du DataFrame final ---
+        df_clean = pd.concat([df_numeric, df_non_numeric], axis=1)
+
+        if target is not None:
+            df_clean[target_col] = target.values
+
+        print(f"\nShape finale : {df_clean.shape}")
+        print("=" * 60)
+
+        return df_clean, to_drop
+
+
 # ─── Main ───────────────────────────────────────────────────────────────────────
+# Charger les données et le ground truth
 df_data = Preview.load_and_preview(Preview.file_data)
-Preview.analyze_missing_values(df_data, 'data')
-corr = Preview.correlation_matrix(df_data, 'data', threshold=0.8)
+df_truth = Preview.load_and_preview(Preview.file_ground_truth_train)
+
+# Fusionner pour avoir la cible dans le DataFrame
+df = df_data.merge(df_truth, on='SEQN', how='left')
+
+# Nettoyer
+df_clean, dropped_cols = Preview.clean(df, target_col='mortstat')
+
+# Sauvegarder
+df_clean.to_csv(os.path.join('data', 'data_clean.csv'), index=False)
+print(f"\nDonnées nettoyées sauvegardées")
