@@ -144,19 +144,3 @@ class Model:
         return submission
 
 
-# ─── Main ────────────────────────────────────────────────────────────────────
-X_train, y_train, X_test, seqn_test = Model.load_data()
-
-model, X_val, y_val = Model.train(X_train, y_train)
-
-f1, best_threshold = Model.evaluate(model, X_val, y_val)
-
-feat_imp = Model.feature_importance(model, X_train, top_n=30)
-
-# Soumission avec seuil optimisé
-Model.predict_and_submit(
-    model, X_test, seqn_test,
-    group_id='mongroupe',       # ← Remplace par ton ID de groupe
-    submission_id='1',
-    threshold=best_threshold    # Utilise le seuil optimisé pour le F1
-)

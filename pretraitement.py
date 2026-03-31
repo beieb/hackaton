@@ -115,7 +115,7 @@ class Preview:
 
 
     @staticmethod
-    def clean(df, target_col=None, nan_thresh=0.50, corr_thresh=0.95, var_thresh=0.01):
+    def clean(df, target_col=None, nan_thresh=0.80, corr_thresh=0.95, var_thresh=0.01):
         """
         Nettoie le DataFrame :
         1. Sépare la cible si fournie
@@ -186,21 +186,3 @@ class Preview:
 
         return df_clean, to_drop
 
-
-# ─── Main ───────────────────────────────────────────────────────────────────────
-# Charger les données et le ground truth
-df_data = Preview.load_and_preview(Preview.file_data)
-df_truth = Preview.load_and_preview(Preview.file_ground_truth_train)
-
-# Fusionner pour avoir la cible dans le DataFrame
-df = df_data.merge(df_truth, on='SEQN', how='left')
-
-# Nettoyer
-df_clean, dropped_cols = Preview.clean(df, target_col='mortstat')
-
-# Sauvegarder
-df_clean.to_csv(os.path.join('data', 'data_clean.csv'), index=False)
-print(f"\nDonnées nettoyées sauvegardées")
-
-df_data_clean = Preview.load_and_preview(os.path.join('data', 'data_clean.csv'))
-Preview.analyze_missing_values(df_data_clean, 'data_clean')
