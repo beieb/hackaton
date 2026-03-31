@@ -2,3 +2,4 @@
 myvenv/
 *.joblib
 *.pyc
+*.png
