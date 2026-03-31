@@ -171,6 +171,7 @@ class Preview:
         print(f"[4] Après suppression des lignes : {df.shape}")
 
         # --- Étape 6 : Supprimer les colonnes redondantes (corrélation) ---
+        
         before = df_numeric.shape[1]
         corr_matrix = df_filled.loc[:, df_numeric.columns].corr().abs()
         upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
