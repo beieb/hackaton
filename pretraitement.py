@@ -115,7 +115,7 @@ class Preview:
 
 
     @staticmethod
-    def clean(df, target_col=None, nan_thresh=0.20, corr_thresh=0.95, var_thresh=0.01):
+    def clean(df, target_col=None, nan_thresh=0.50, corr_thresh=0.95, var_thresh=0.01):
         """
         Nettoie le DataFrame :
         1. Sépare la cible si fournie
@@ -143,9 +143,9 @@ class Preview:
 
         # --- Étape 1 : Supprimer colonnes avec trop de NaN ---
         before = df.shape[1]
-        df = df.dropna(thresh=len(df) * nan_thresh, axis=1)
+        df = df.dropna(thresh=len(df) * (1-nan_thresh), axis=1)
         after = df.shape[1]
-        print(f"\n[1] Suppression NaN > {nan_thresh*100:.0f}% : {before} → {after} colonnes (-{before - after})")
+        print(f"\n[1] Suppression NaN > {(1-nan_thresh)*100:.0f}% : {before} → {after} colonnes (-{before - after})")
 
         # --- Étape 2 : Garder uniquement les colonnes numériques ---
         df_numeric = df.select_dtypes(include=[np.number])
@@ -201,3 +201,6 @@ df_clean, dropped_cols = Preview.clean(df, target_col='mortstat')
 # Sauvegarder
 df_clean.to_csv(os.path.join('data', 'data_clean.csv'), index=False)
 print(f"\nDonnées nettoyées sauvegardées")
+
+df_data_clean = Preview.load_and_preview(os.path.join('data', 'data_clean.csv'))
+Preview.analyze_missing_values(df_data_clean, 'data_clean')
