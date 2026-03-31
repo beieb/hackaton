@@ -13,6 +13,7 @@ class Model:
     @staticmethod
     def load_data():
         df = pd.read_csv(os.path.join('data', 'data_imputed.csv'))
+
         
         df_train = df[df['MORTSTAT_2019'].notna()].copy()
         df_test  = df[df['MORTSTAT_2019'].isna()].copy()

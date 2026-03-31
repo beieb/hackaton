@@ -133,9 +133,6 @@ class Preview:
     @staticmethod
     def clean(df, target_col=None, nan_thresh=0.80, corr_thresh=0.95, var_thresh=0,
             nan_row_thresh=0.7, scale=True, keep_cols=None):
-        """
-        keep_cols : liste de colonnes à garder quoi qu'il arrive (NaN, variance, corrélation)
-        """
         keep_cols = keep_cols or []
 
         print("=" * 60)
@@ -177,12 +174,9 @@ class Preview:
         print(f"[3] Suppression variance < {var_thresh} : {before} → {after} colonnes (-{before - after})")
         if protected:
             print(f"    Colonnes protégées réintégrées : {protected}")
-
-        # --- Étape 5 : Supprimer les lignes problématiques ---
         df = Preview.drop_useless_rows(df, nan_row_thresh=nan_row_thresh)
         print(f"[4] Après suppression des lignes : {df.shape}")
 
-        # --- Étape 6 : Supprimer les colonnes redondantes (corrélation) ---
         before = df_numeric.shape[1]
         df_filled = df_numeric.fillna(df_numeric.median())
         corr_matrix = df_filled.corr().abs()
@@ -196,6 +190,11 @@ class Preview:
         after = df_numeric.shape[1]
         print(f"[5] Suppression corrélation > {corr_thresh} : {before} → {after} colonnes (-{before - after})")
         print(f"    Colonnes supprimées : {to_drop}")
+
+        # --- Étape 6 : Supprimer les lignes problématiques ---
+
+        df = Preview.drop_useless_rows(df, nan_row_thresh=nan_row_thresh)
+        print(f"[4] Après suppression des lignes : {df.shape}")
 
         # --- Étape 7 : Normalisation ---
         if scale:
