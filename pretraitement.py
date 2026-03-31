@@ -32,14 +32,31 @@ class Preview:
     @staticmethod
     def show_as_graph(missing_values, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        
+        filtered = missing_values[missing_values > 0]
+        
+        # Si aucune valeur manquante, sauvegarder un graphique vide avec message
+        if filtered.empty:
+            plt.figure(figsize=(6, 3))
+            plt.text(0.5, 0.5, 'Aucune valeur manquante', 
+                    ha='center', va='center', fontsize=14,
+                    transform=plt.gca().transAxes)
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(path)
+            plt.close()
+            print(f"Aucune valeur manquante — graphique vide sauvegardé : {path}")
+            return
+
         plt.figure(figsize=(10, 6))
-        missing_values[missing_values > 0].plot(kind='bar')
+        filtered.plot(kind='bar')
         plt.title('Missing Values per Column')
         plt.xlabel('Columns')
         plt.ylabel('Number of Missing Values')
         plt.tight_layout()
         plt.savefig(path)
         plt.close()
+
     @staticmethod
     def correlation_matrix(df, name, threshold=0.8):
         df_numeric = df.select_dtypes(include=[np.number])
