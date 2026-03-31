@@ -32,12 +32,12 @@ class Preview:
     @staticmethod
     def show_as_graph(missing_values, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-
         filtered = missing_values[missing_values > 0]
 
         if filtered.empty:
             plt.figure(figsize=(6, 3))
             plt.text(0.5, 0.5, 'Aucune valeur manquante',
+
                     ha='center', va='center', fontsize=14,
                     transform=plt.gca().transAxes)
             plt.axis('off')

@@ -8,7 +8,6 @@ df_data  = Preview.load_and_preview(Preview.file_data)
 df_truth = Preview.load_and_preview(Preview.file_ground_truth_train)
 df       = df_data.merge(df_truth, on='SEQN', how='left')
 
-# --- Nettoyage (sans normalisation) ---
 df_clean, _, dropped_cols = Preview.clean(
     df, target_col='MORTSTAT_2019',
     nan_thresh=0.61, corr_thresh=0.95,
