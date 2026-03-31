@@ -131,25 +131,12 @@ class Preview:
 
 
     @staticmethod
-    def clean(df, target_col=None, nan_thresh=0.80, corr_thresh=0.95, var_thresh=0, nan_row_thresh=0.7, scale=True):
+    def clean(df, target_col=None, nan_thresh=0.80, corr_thresh=0.95, var_thresh=0,
+            nan_row_thresh=0.7, scale=True, keep_cols=None):
         """
-        Nettoie le DataFrame :
-        1. Supprime les lignes problématiques (vides, trop de NaN, doublons).
-        2. Sépare la cible si fournie.
-        3. Supprime les colonnes avec trop de NaN.
-        4. Supprime les colonnes à variance quasi nulle.
-        5. Supprime les colonnes redondantes (corrélation > corr_thresh).
-        6. Normalise les features numériques (optionnel).
-
-        Paramètres :
-        - df          : DataFrame à nettoyer.
-        - target_col  : Nom de la colonne cible (optionnel).
-        - nan_thresh  : Seuil de NaN pour les colonnes (défaut : 20 %).
-        - corr_thresh : Seuil de corrélation pour suppression (défaut : 0.95).
-        - var_thresh  : Seuil de variance minimale (défaut : 0.01).
-        - nan_row_thresh : Seuil de NaN pour les lignes (défaut : 70 %).
-        - scale       : Normaliser les features (défaut : True).
+        keep_cols : liste de colonnes à garder quoi qu'il arrive (NaN, variance, corrélation)
         """
+        keep_cols = keep_cols or []
 
         print("=" * 60)
         print(f"Shape initiale : {df.shape}")
@@ -163,35 +150,48 @@ class Preview:
 
         # --- Étape 2 : Supprimer les colonnes avec trop de NaN ---
         before = df.shape[1]
-        df = df.dropna(thresh=len(df) * (1-nan_thresh), axis=1)
+        cols_to_check = [c for c in df.columns if c not in keep_cols]  # exclure keep_cols
+        cols_to_keep_nan = df[cols_to_check].dropna(
+            thresh=len(df) * (1 - nan_thresh), axis=1
+        ).columns.tolist()
+        df = df[cols_to_keep_nan + [c for c in keep_cols if c in df.columns]]
         after = df.shape[1]
         print(f"\n[1] Suppression NaN > {(1-nan_thresh)*100:.0f}% : {before} → {after} colonnes (-{before - after})")
 
-        # --- Étape 3 : Garder uniquement les colonnes numériques ---
-        df_numeric = df.select_dtypes(include=[np.number])
+        # --- Étape 3 : Séparer numériques / non numériques ---
+        df_numeric     = df.select_dtypes(include=[np.number])
         df_non_numeric = df.select_dtypes(exclude=[np.number])
         print(f"[2] Colonnes numériques : {df_numeric.shape[1]} | non-numériques : {df_non_numeric.shape[1]}")
 
         # --- Étape 4 : Supprimer les colonnes à variance quasi nulle ---
         before = df_numeric.shape[1]
         from sklearn.feature_selection import VarianceThreshold
-        selector = VarianceThreshold(threshold=var_thresh)
-        df_filled = df_numeric.fillna(df_numeric.median())  # Remplir les NaN pour calculer la variance
+        selector  = VarianceThreshold(threshold=var_thresh)
+        df_filled = df_numeric.fillna(df_numeric.median())
         selector.fit(df_filled)
-        df_numeric = df_numeric.loc[:, selector.get_support()]
+        supported = df_numeric.columns[selector.get_support()].tolist()
+        # Réintégrer les keep_cols même si variance faible
+        protected = [c for c in keep_cols if c in df_numeric.columns and c not in supported]
+        df_numeric = df_numeric[supported + protected]
         after = df_numeric.shape[1]
         print(f"[3] Suppression variance < {var_thresh} : {before} → {after} colonnes (-{before - after})")
+        if protected:
+            print(f"    Colonnes protégées réintégrées : {protected}")
 
         # --- Étape 5 : Supprimer les lignes problématiques ---
         df = Preview.drop_useless_rows(df, nan_row_thresh=nan_row_thresh)
         print(f"[4] Après suppression des lignes : {df.shape}")
 
         # --- Étape 6 : Supprimer les colonnes redondantes (corrélation) ---
-        
         before = df_numeric.shape[1]
-        corr_matrix = df_filled.loc[:, df_numeric.columns].corr().abs()
-        upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-        to_drop = [col for col in upper.columns if any(upper[col] > corr_thresh)]
+        df_filled = df_numeric.fillna(df_numeric.median())
+        corr_matrix = df_filled.corr().abs()
+        upper   = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+        # Ne pas supprimer les keep_cols même si corrélées
+        to_drop = [
+            col for col in upper.columns
+            if any(upper[col] > corr_thresh) and col not in keep_cols
+        ]
         df_numeric = df_numeric.drop(columns=to_drop)
         after = df_numeric.shape[1]
         print(f"[5] Suppression corrélation > {corr_thresh} : {before} → {after} colonnes (-{before - after})")
@@ -199,13 +199,15 @@ class Preview:
 
         # --- Étape 7 : Normalisation ---
         if scale:
-            df_scaled, scaler = Preview.scale_features(pd.concat([df_numeric, df_non_numeric], axis=1), target_col=target_col)
+            df_scaled, scaler = Preview.scale_features(
+                pd.concat([df_numeric, df_non_numeric], axis=1), target_col=target_col
+            )
             print(f"[6] Normalisation des features numériques")
         else:
             df_scaled = pd.concat([df_numeric, df_non_numeric], axis=1)
-            scaler = None
+            scaler    = None
 
-        # --- Reconstruction du DataFrame final ---
+        # --- Reconstruction ---
         if target is not None:
             df_scaled[target_col] = target.values
 
